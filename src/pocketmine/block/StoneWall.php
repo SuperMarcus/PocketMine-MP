@@ -22,10 +22,13 @@
 namespace pocketmine\block;
 
 
+use pocketmine\item\Tool;
 use pocketmine\math\AxisAlignedBB;
 use pocketmine\math\Vector3;
 
 class StoneWall extends Transparent{
+	const NONE_MOSSY_WALL = 0;
+	const MOSSY_WALL = 1;
 
 	protected $id = self::STONE_WALL;
 
@@ -37,8 +40,12 @@ class StoneWall extends Transparent{
 		return false;
 	}
 
+	public function getToolType(){
+		return Tool::TYPE_PICKAXE;
+	}
+
 	public function getHardness(){
-		return 30;
+		return 2;
 	}
 
 	public function getName(){

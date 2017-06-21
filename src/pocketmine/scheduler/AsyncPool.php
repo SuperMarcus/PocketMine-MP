@@ -47,7 +47,7 @@ class AsyncPool{
 
 		for($i = 0; $i < $this->size; ++$i){
 			$this->workerUsage[$i] = 0;
-			$this->workers[$i] = new AsyncWorker;
+			$this->workers[$i] = new AsyncWorker($this->server->getLogger(), $i + 1);
 			$this->workers[$i]->setClassLoader($this->server->getLoader());
 			$this->workers[$i]->start();
 		}
@@ -60,13 +60,13 @@ class AsyncPool{
 	public function increaseSize($newSize){
 		$newSize = (int) $newSize;
 		if($newSize > $this->size){
-			$this->size = $newSize;
 			for($i = $this->size; $i < $newSize; ++$i){
 				$this->workerUsage[$i] = 0;
-				$this->workers[$i] = new AsyncWorker;
+				$this->workers[$i] = new AsyncWorker($this->server->getLogger(), $i + 1);
 				$this->workers[$i]->setClassLoader($this->server->getLoader());
 				$this->workers[$i]->start();
 			}
+			$this->size = $newSize;
 		}
 	}
 
@@ -109,8 +109,7 @@ class AsyncPool{
 			if(!$force and ($task->isRunning() or !$task->isGarbage())){
 				return;
 			}
-			$this->workers[$w = $this->taskWorkers[$task->getTaskId()]]->unstack($task);
-			$this->workerUsage[$w]--;
+			$this->workerUsage[$this->taskWorkers[$task->getTaskId()]]--;
 		}
 
 		unset($this->tasks[$task->getTaskId()]);
@@ -127,7 +126,7 @@ class AsyncPool{
 			}
 
 			if(count($this->tasks) > 0){
-				usleep(25000);
+				Server::microSleep(25000);
 			}
 		}while(count($this->tasks) > 0);
 
@@ -143,18 +142,16 @@ class AsyncPool{
 		Timings::$schedulerAsyncTimer->startTiming();
 
 		foreach($this->tasks as $task){
-			if($task->isGarbage() and !$task->isRunning()){
+			if($task->isGarbage() and !$task->isRunning() and !$task->isCrashed()){
 
 				if(!$task->hasCancelledRun()){
 					$task->onCompletion($this->server);
 				}
 
 				$this->removeTask($task);
-			}elseif($task->isTerminated()){
-				$info = $task->getTerminationInfo();
+			}elseif($task->isTerminated() or $task->isCrashed()){
+				$this->server->getLogger()->critical("Could not execute asynchronous task " . (new \ReflectionClass($task))->getShortName() . ": Task crashed");
 				$this->removeTask($task, true);
-				$this->server->getLogger()->critical("Could not execute asynchronous task " . (new \ReflectionClass($task))->getShortName() . ": " . (isset($info["message"]) ? $info["message"] : "Unknown"));
-				$this->server->getLogger()->critical("On ".$info["scope"].", line ".$info["line"] .", ".$info["function"]."()");
 			}
 		}
 
